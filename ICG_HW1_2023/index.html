@@ -263,11 +263,15 @@
     var ambiet_light_color = vec3.create([1., 1., 1.]);
     // animation controls
     var rotate_flag = false;
+    var shear_flag = false;
     var lastTime = 0;
     var random_light_flag = false;
     var transparent = 1.0;
     var plane = -10;
     var planes = [-10, -10, -10];
+    var planes_buffer = [...planes];
+    var rotate_speed = [1, 1, 1];
+    var shear_speed = 1;
     // var clip_y = 0.0;
     var clip_flag = false;
     // random light
@@ -275,6 +279,7 @@
     var frame_light_change = [10 , 15, 13700];
     var frame_count = [...frame_light_change];
     var auto_rotate_before = false;
+    
 
     // obj select: store the element values
     var obj_focus = 0;
@@ -283,9 +288,12 @@
     var obj_shear_buffer = [[90, 90, 90],[90, 90, 90],[90, 90, 90]];
     var obj_scale_buffer = [0, 0, 0];
     var obj_scale_ratio = [100, 10, 10];
+    // var obj_rotate_speed_buffer = [1, 1, 1];
 
     // rotate when auto rotate
     var obj_rotate_state_buffer = [[0, 0, 0],[0, 0, 0],[0, 0, 0]]
+    // shear direction
+    var obj_shear_dir = true;
     //*************************************************
     // Initialization functions
     //*************************************************
@@ -430,7 +438,7 @@
         obj.VertexFrontColorBuffer.numItems = objData.vertexFrontcolors.length / 3;
     }
 
-    function loadObj(obj) {
+    function loadObj(obj, objid) {
         var request = new XMLHttpRequest();
         request.open("GET", "./model/"+obj.name);
         request.onreadystatechange = function () {
@@ -442,9 +450,9 @@
                 let vertexNormals = jsonObj.vertexNormals;
 
                 for (let i = 1; i < vertexPositions.length; i += 3) {
-                    if (vertexPositions[i] < plane) {
+                    if (vertexPositions[i] < planes[objid]) {
                         vertexPositions[i - 1] = 0;
-                        vertexPositions[i] = plane;
+                        vertexPositions[i] = planes[objid];
                         vertexPositions[i + 1] = 0;
                         
                         vertexBackcolors[i - 1] = 0;
@@ -456,7 +464,7 @@
                         vertexFrontcolors[i + 1] = 0;
 
                         vertexNormals[i - 1] = 0;
-                        vertexNormals[i] = plane;
+                        vertexNormals[i] = 0;
                         vertexNormals[i + 1] = 0;
                     }
                 }
@@ -531,7 +539,9 @@
         if(rotate_flag){
             rotate_objects();
         }
-
+        if(shear_flag){
+            shear_objects();
+        }
         if(random_light_flag){
             random_light();
         }
@@ -546,7 +556,7 @@
         for(var i=0 ; i<3 ; i+=1){
             obj_vec.push( new CGObject(i, obj_names[i], obj_default_trans[i], obj_default_rotate[i], obj_default_scale[i], obj_default_shear) );
             console.log(obj_vec[i]);
-            loadObj(obj_vec[i]);
+            loadObj(obj_vec[i], i);
         }
 
         gl.clearColor(ka*ambiet_light_color[0], ka*ambiet_light_color[1], ka*ambiet_light_color[2], transparent);
@@ -591,10 +601,31 @@
         // auto_rotate = true;
         for (let i =0;  i < obj_names.length; i++){
             obj_default_rotate[i] = obj_vec[i].rotate_vec;
-            obj_vec[i].rotate_vec[0] += 1;
+            obj_vec[i].rotate_vec[0] += 1*rotate_speed[i];
             // obj_vec[i].rotate_vec[1] += 1;
             // obj_vec[i].rotate_vec[2] += 1;
         }
+    }
+
+    function shear_objects(){   // only shear y
+        let shear_y = obj_vec[1].shear_vec[1];
+        if (obj_shear_dir){
+            shear_y += shear_speed;
+            if (shear_y > 130)
+                obj_shear_dir = false;
+        }
+        else {
+            shear_y -= shear_speed;
+            if (shear_y < 50)
+                obj_shear_dir = true;
+        }
+        
+        for (let i = 0; i< obj_names.length; i++){
+
+            obj_vec[i].shear_vec[1] = shear_y;
+            obj_shear_buffer[i][1] = shear_y;
+        }
+        document.getElementById("shearY").value = shear_y;
     }
 
     function update_ambient_light(paramid){
@@ -663,39 +694,43 @@
         obj_vec[objid].scale_vec = vec3.create([obj_default_scale[objid][0]*(2**s),
                                                 obj_default_scale[objid][1]*(2**s), 
                                                 obj_default_scale[objid][2]*(2**s)]);
-        // console.log(obj_vec[objid].scale_vec)      
     }
     
     function update_clip(objid){
         planes[objid] = parseFloat(document.getElementById("clip").value);
+        planes_buffer[objid] = planes[objid];
         update_plane(objid);
-        // loadObj(obj_vec[objid]);
     }
 
-    function update_plane(objid){
+    async function update_plane(objid){
         if(clip_flag){
-            plane = planes[objid];
-            loadObj(obj_vec[objid]);
+            // console.log(objid, plane);
+            await loadObj(obj_vec[objid], objid);
         }
         else {
-            plane = -10;
-            loadObj(obj_vec[objid]);
+            planes[objid] = -10;
+            await loadObj(obj_vec[objid], objid);
         }
     };
 
     function update_clip_flag(value){
         clip_flag = value;      // true for clipping, false for not
-        // update_plane(0);
 
-        for (let i=0; i< obj_names.length; i++){
-            console.log(i);
+        for (let i=0; i< obj_names.length; i+=1){
             update_plane(i);
         }
-    
     }
 
     function update_auto_rotate(isRotate){
         auto_rotate_before = !isRotate;
+    }
+
+    function update_rotate_speed(objid){
+        rotate_speed[objid] = parseInt(document.getElementById("rotate_speed").value);
+    }
+
+    function update_shear_speed(objid){
+        shear_speed = parseInt(document.getElementById("shear_speed").value);
     }
 
     function update_focus(value){
@@ -721,7 +756,7 @@
         let scale_focus = obj_scale_buffer[value];
         document.getElementById("scale").value = scale_focus;
         // clip
-        document.getElementById("clip").value = planes[value];
+        document.getElementById("clip").value = planes_buffer[value];
     }
 
     function handleClickRadio(radio){
@@ -795,9 +830,9 @@
 
         <span>Object</span>  
         <select id="value_select" oninput="update_focus(this.value)" autocomplete="off">
-            <option value="0">Object 1</option>
-            <option value="1">Object 2</option>
-            <option value="2">Object 3</option>
+            <option value="0">Teapot</option>
+            <option value="1">Csie</option>
+            <option value="2">Kangaroo</option>
         </select>
         <table>
             <tr>
@@ -838,8 +873,18 @@
             </tr>
         </table>
         <span>Auto Rotate</span><input id="auto_rotate" type="checkbox" autocomplete="off" oninput="rotate_flag=this.checked;update_auto_rotate(this.checked)">
+        <span>Auto Shear</span><input id="auto_shear" type="checkbox" autocomplete="off" oninput="shear_flag=this.checked;">
         <span>Auto Light</span><input id="auto_light" type="checkbox" autocomplete="off" oninput="random_light_flag=this.checked;">
-
+        <table>
+            <tr>
+                <td>Rotate Speed</td>
+                <td><input id="rotate_speed" type="range" autocomplete="off" value="1." max="90." min="1." step="0.5" oninput="update_rotate_speed(obj_focus)"></td>
+            </tr>
+            <tr>
+                <td>Shear Speed</td>
+                <td><input id="shear_speed" type="range" autocomplete="off" value="1." max="20." min="1." step="0.5" oninput="update_shear_speed()"></td>
+            </tr>
+        </table>
 
     </p>
 </body>
