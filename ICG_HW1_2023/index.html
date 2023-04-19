@@ -32,13 +32,14 @@
     varying vec4 fragcolor;     // vertex color
     varying vec3 N;             // normal vector
 
-    varying float clip_flag_copy;
-    varying float clip_y_copy;
+    /*varying float clip_flag_copy;
+    varying float clip_y_copy;*/
 
     void main(void) {
-        if (gl_FragCoord.y <= clip_y_copy && clip_flag_copy > 0. ){
+        
+        /*if (gl_FragCoord.y <= clip_y_copy && clip_flag_copy > 0. ){
             discard;
-        }
+        }*/
         if(shading_mode[0] == 1.){                      // gouraud shading;
             gl_FragColor = fragcolor;
         }
@@ -139,8 +140,8 @@
     uniform float volume;
 
     // clip plane. here only y is considered
-    uniform float clip_y;
-    uniform bool clip_flag;
+    /*uniform float clip_y;
+    uniform bool clip_flag;*/
 
     varying vec3 vertexColor;
     varying vec3 fragPosition;
@@ -156,8 +157,8 @@
     varying vec3 N;            // normal interpolation
     varying vec4 fragcolor;
 
-    varying float clip_flag_copy;
-    varying float clip_y_copy;
+    /*varying float clip_flag_copy;
+    varying float clip_y_copy;*/
 
     void main(void) {
         Ka_val = Ka;
@@ -177,8 +178,8 @@
 
         gl_Position = uPMatrix * uMVMatrix * vec4(vertex_copy, 1.0);
         // clipping
-        clip_flag_copy = float(clip_flag);
-        clip_y_copy = clip_y;
+        /*clip_flag_copy = float(clip_flag);
+        clip_y_copy = clip_y;*/
         // clipped = (gl_Position.y > clip_y || !clip_flag)? 1.0: 0.0;
 
         if (mode == 1){    // Gouraud
@@ -265,7 +266,9 @@
     var lastTime = 0;
     var random_light_flag = false;
     var transparent = 1.0;
-    var clip_y = 0.0;
+    var plane = -10;
+    var planes = [-10, -10, -10];
+    // var clip_y = 0.0;
     var clip_flag = false;
     // random light
     var random_light_color = [[1, 0, 0], [0, 1, 0], [0, 0, 1], [1, 1, 0], [1, 0, 1], [0, 1, 1]];
@@ -360,8 +363,8 @@
         gl.uniform3fv(gl.getUniformLocation(shaderProgram, "lightKdKsCD"), light_kdkscd);
         gl.uniform1f(gl.getUniformLocation(shaderProgram, "Ka"), ka);
         gl.uniform3fv(gl.getUniformLocation(shaderProgram, "ambient_color"), ambiet_light_color);
-        gl.uniform1f(gl.getUniformLocation(shaderProgram, "clip_y"), clip_y);
-        gl.uniform1i(gl.getUniformLocation(shaderProgram, "clip_flag"), clip_flag);
+        // gl.uniform1f(gl.getUniformLocation(shaderProgram, "clip_y"), clip_y);
+        // gl.uniform1i(gl.getUniformLocation(shaderProgram, "clip_flag"), clip_flag);
 
         
         var context = new AudioContext();
@@ -422,7 +425,38 @@
         request.open("GET", "./model/"+obj.name);
         request.onreadystatechange = function () {
             if (request.readyState == 4) {
-                handleLoaded(obj, JSON.parse(request.responseText));
+                let jsonObj = JSON.parse(request.responseText);
+                let vertexPositions = jsonObj.vertexPositions;
+                let vertexBackcolors = jsonObj.vertexBackcolors;
+                let vertexFrontcolors = jsonObj.vertexFrontcolors;
+                let vertexNormals = jsonObj.vertexNormals;
+
+                for (let i = 1; i < vertexPositions.length; i += 3) {
+                    if (vertexPositions[i] < plane) {
+                        vertexPositions[i - 1] = 0;
+                        vertexPositions[i] = 0;
+                        vertexPositions[i + 1] = 0;
+                        
+                        vertexBackcolors[i - 1] = 0;
+                        vertexBackcolors[i] = 0;
+                        vertexBackcolors[i + 1] = 0;
+
+                        vertexFrontcolors[i - 1] = 0;
+                        vertexFrontcolors[i] = 0;
+                        vertexFrontcolors[i + 1] = 0;
+
+                        vertexNormals[i - 1] = 0;
+                        vertexNormals[i] = 0;
+                        vertexNormals[i + 1] = 0;
+                    }
+                }
+                jsonObj.vertexPositions = vertexPositions
+                jsonObj.vertexBackcolors = vertexBackcolors
+                jsonObj.vertexFrontcolors = vertexFrontcolors
+                jsonObj.vertexNormals = vertexNormals
+                
+                handleLoaded(obj, jsonObj);
+                console.log(jsonObj);
             }
         }
         request.send();
@@ -468,8 +502,8 @@
             gl.uniform1f(gl.getUniformLocation(shaderProgram, "Ka"), ka);
             gl.uniform3fv(gl.getUniformLocation(shaderProgram, "ambient_color"), ambiet_light_color);
             // clipping
-            gl.uniform1f(gl.getUniformLocation(shaderProgram, "clip_y"), clip_y);
-            gl.uniform1i(gl.getUniformLocation(shaderProgram, "clip_flag"), clip_flag);
+            // gl.uniform1f(gl.getUniformLocation(shaderProgram, "clip_y"), clip_y);
+            // gl.uniform1i(gl.getUniformLocation(shaderProgram, "clip_flag"), clip_flag);
 
             gl.uniform1f( gl.getUniformLocation(shaderProgram, "volume"), frequencyData[Math.floor(256 / 7) * i] / 625 );
             gl.drawArrays(gl.TRIANGLES, 0, obj_vec[i].VertexPositionBuffer.numItems);
@@ -613,12 +647,34 @@
         // console.log(obj_vec[objid].scale_vec)      
     }
     
-    function update_clip_y(value){
-        clip_y = parseFloat(value);
+    function update_clip(objid){
+        planes[objid] = parseFloat(document.getElementById(objid+"_clip").value);
+        update_plane(objid);
+        // loadObj(obj_vec[objid]);
     }
+
+    function update_plane(objid){
+        if(clip_flag){
+            plane = planes[objid];
+            loadObj(obj_vec[objid]);
+        }
+        else {
+            plane = -10;
+            loadObj(obj_vec[objid]);
+        }
+    };
+
+    // function update_clip_y(value){
+    //     clip_y = parseFloat(value);
+    // }
 
     function update_clip_flag(value){
         clip_flag = value;      // true for clipping, false for not
+        
+        for (let i=0; i< 3; i++){
+            update_plane(i);
+        }
+    
     }
 
     function handleClickRadio(radio){
@@ -720,7 +776,7 @@
                 <td>Clipping?</td>
                 <td><input id="clip_flag" type="checkbox" autocomplete="off" oninput="update_clip_flag(this.checked)"></td>
                 <td>Y plane</td>
-                <td><input id="0_clip_y" type="range" autocomplete="off" value="0." max="590." min="0." oninput="update_clip_y(this.value)"></td>
+                <td><input id="0_clip" type="range" autocomplete="off" value="-10." max="10." min="-10." oninput="update_clip(0)"></td>
             </tr>
         </table>
         <span>Auto Rotate</span><input id="auto_rotate" type="checkbox" autocomplete="off" oninput="rotate_flag=this.checked;">
