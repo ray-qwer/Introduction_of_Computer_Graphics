@@ -249,7 +249,7 @@
     var mvMatrix = mat4.create();
     var pMatrix  = mat4.create();
     // object parameters
-    var obj_names = ["Teapot.json"];        // TODO: add more objs
+    var obj_names = ["Teapot.json","Csie.json","Kangaroo.json"];        // TODO: add more objs
     var obj_vec = [];
     var obj_default_trans = [vec3.create([0., 0., -15.]), vec3.create([15., 0., -37.]),  vec3.create([-15., -1., -37.])];
     var obj_default_rotate = [vec3.create([0., 0., -0.]), vec3.create([-90., 0., -50.]), vec3.create([-90., 0., -50.])];
@@ -274,8 +274,18 @@
     var random_light_color = [[1, 0, 0], [0, 1, 0], [0, 0, 1], [1, 1, 0], [1, 0, 1], [0, 1, 1]];
     var frame_light_change = [10 , 15, 13700];
     var frame_count = [...frame_light_change];
-    var auto_rotate = false;
+    var auto_rotate_before = false;
 
+    // obj select: store the element values
+    var obj_focus = 0;
+    var obj_trans_buffer = [[0, 0, -15],[0, 0, -15],[0, 0, -15]];
+    var obj_rotate_buffer = [[0, 0, 0],[0, 0, 0],[0, 0, 0]];
+    var obj_shear_buffer = [[90, 90, 90],[90, 90, 90],[90, 90, 90]];
+    var obj_scale_buffer = [0, 0, 0];
+    var obj_scale_ratio = [100, 10, 10];
+
+    // rotate when auto rotate
+    var obj_rotate_state_buffer = [[0, 0, 0],[0, 0, 0],[0, 0, 0]]
     //*************************************************
     // Initialization functions
     //*************************************************
@@ -434,7 +444,7 @@
                 for (let i = 1; i < vertexPositions.length; i += 3) {
                     if (vertexPositions[i] < plane) {
                         vertexPositions[i - 1] = 0;
-                        vertexPositions[i] = 0;
+                        vertexPositions[i] = plane;
                         vertexPositions[i + 1] = 0;
                         
                         vertexBackcolors[i - 1] = 0;
@@ -446,7 +456,7 @@
                         vertexFrontcolors[i + 1] = 0;
 
                         vertexNormals[i - 1] = 0;
-                        vertexNormals[i] = 0;
+                        vertexNormals[i] = plane;
                         vertexNormals[i + 1] = 0;
                     }
                 }
@@ -456,7 +466,7 @@
                 jsonObj.vertexNormals = vertexNormals
                 
                 handleLoaded(obj, jsonObj);
-                console.log(jsonObj);
+                // console.log(jsonObj);
             }
         }
         request.send();
@@ -507,6 +517,8 @@
 
             gl.uniform1f( gl.getUniformLocation(shaderProgram, "volume"), frequencyData[Math.floor(256 / 7) * i] / 625 );
             gl.drawArrays(gl.TRIANGLES, 0, obj_vec[i].VertexPositionBuffer.numItems);
+            // gl.drawArrays(gl.LINES, 0, obj_vec[i].VertexPositionBuffer.numItems);
+
         }
     }
 
@@ -556,7 +568,7 @@
 
     function random_light(){
 
-        for (let i = 0; i< 3; i++){
+        for (let i = 0; i< 2; i++){
             // light change
             if (frame_count[i] < frame_light_change[i]){
                 frame_count[i] += 1;
@@ -576,7 +588,7 @@
     }
 
     function rotate_objects(){
-        auto_rotate = true;
+        // auto_rotate = true;
         for (let i =0;  i < obj_names.length; i++){
             obj_default_rotate[i] = obj_vec[i].rotate_vec;
             obj_vec[i].rotate_vec[0] += 1;
@@ -609,38 +621,45 @@
     }
     
     function update_trans(objid){
-        var tx = document.getElementById(objid + "_transX").value;
-        var ty = document.getElementById(objid + "_transY").value;
-        var tz = document.getElementById(objid + "_transZ").value;
+        var tx = document.getElementById("transX").value;
+        var ty = document.getElementById("transY").value;
+        var tz = document.getElementById("transZ").value;
         obj_vec[objid].translation_vec = vec3.create([tx, ty, tz]);
+        obj_trans_buffer[objid] = [tx, ty, tz];
     }
 
     function update_rotate(objid){
-        document.getElementById("auto_rotate").checked = false;
-        var rx = parseFloat(document.getElementById(objid + "_rotateX").value);
-        var ry = parseFloat(document.getElementById(objid + "_rotateY").value);
-        var rz = parseFloat(document.getElementById(objid + "_rotateZ").value);
-        if (auto_rotate){
+        var rx = parseFloat(document.getElementById("rotateX").value);
+        var ry = parseFloat(document.getElementById("rotateY").value);
+        var rz = parseFloat(document.getElementById("rotateZ").value);
+        // if is auto-rotate and unclicked before, then do: 
+        if (auto_rotate_before){
             obj_default_rotate[objid][0] = obj_vec[objid].rotate_vec[0] - rx;
             obj_default_rotate[objid][1] = obj_vec[objid].rotate_vec[1] - ry;
             obj_default_rotate[objid][2] = obj_vec[objid].rotate_vec[2] - rz;
-            auto_rotate = false;
+            auto_rotate_before = false;
         }
-        rotate_flag = false;
-        
+        obj_rotate_buffer[objid] = [rx, ry, rz];
+        if (rotate_flag){
+            let rx_ = rx; let ry_ = ry; let rz_ = rz;
+            rx = rx-obj_rotate_state_buffer[objid][0]; ry = ry-obj_rotate_state_buffer[objid][1]; rz = rz-obj_rotate_state_buffer[objid][2];
+            obj_rotate_state_buffer[objid] = [rx_, ry_, rz_];
+        }
         obj_vec[objid].rotate_vec = vec3.create([ obj_default_rotate[objid][0]+rx, obj_default_rotate[objid][1]+ry, obj_default_rotate[objid][2]+rz]);
-
     }
     
     function update_shear(objid){
-        var sx = parseFloat(document.getElementById(objid + "_shearX").value);
-        var sy = parseFloat(document.getElementById(objid + "_shearY").value);
-        var sz = parseFloat(document.getElementById(objid + "_shearZ").value);        
+        var sx = parseFloat(document.getElementById("shearX").value);
+        var sy = parseFloat(document.getElementById("shearY").value);
+        var sz = parseFloat(document.getElementById("shearZ").value);        
         obj_vec[objid].shear_vec = vec3.create([sx, sy, sz]);
+        obj_shear_buffer[objid] = [sx, sy, sz];
     }
 
     function update_scale(objid){
-        var s = parseFloat(document.getElementById(objid + "_scale").value)/100; 
+        var s = parseFloat(document.getElementById("scale").value); 
+        obj_scale_buffer[objid] = s;
+        s = s/ obj_scale_ratio[objid];
         obj_vec[objid].scale_vec = vec3.create([obj_default_scale[objid][0]*(2**s),
                                                 obj_default_scale[objid][1]*(2**s), 
                                                 obj_default_scale[objid][2]*(2**s)]);
@@ -648,7 +667,7 @@
     }
     
     function update_clip(objid){
-        planes[objid] = parseFloat(document.getElementById(objid+"_clip").value);
+        planes[objid] = parseFloat(document.getElementById("clip").value);
         update_plane(objid);
         // loadObj(obj_vec[objid]);
     }
@@ -664,17 +683,45 @@
         }
     };
 
-    // function update_clip_y(value){
-    //     clip_y = parseFloat(value);
-    // }
-
     function update_clip_flag(value){
         clip_flag = value;      // true for clipping, false for not
-        
-        for (let i=0; i< 3; i++){
+        // update_plane(0);
+
+        for (let i=0; i< obj_names.length; i++){
+            console.log(i);
             update_plane(i);
         }
     
+    }
+
+    function update_auto_rotate(isRotate){
+        auto_rotate_before = !isRotate;
+    }
+
+    function update_focus(value){
+        value = parseInt(value);
+        obj_focus = value;
+        // change value of slide bar
+        // rotate
+        let rotate_vec_focus = obj_rotate_buffer[value];
+        document.getElementById("rotateX").value = rotate_vec_focus[0];
+        document.getElementById("rotateY").value = rotate_vec_focus[1]; 
+        document.getElementById("rotateZ").value = rotate_vec_focus[2]; 
+        // trans
+        let trans_vec_focus = obj_trans_buffer[value];
+        document.getElementById("transX").value = trans_vec_focus[0];
+        document.getElementById("transY").value = trans_vec_focus[1]; 
+        document.getElementById("transZ").value = trans_vec_focus[2];
+        // shear
+        let shear_vec_focus = obj_shear_buffer[value];
+        document.getElementById("shearX").value = shear_vec_focus[0];
+        document.getElementById("shearY").value = shear_vec_focus[1]; 
+        document.getElementById("shearZ").value = shear_vec_focus[2];
+        // scale
+        let scale_focus = obj_scale_buffer[value];
+        document.getElementById("scale").value = scale_focus;
+        // clip
+        document.getElementById("clip").value = planes[value];
     }
 
     function handleClickRadio(radio){
@@ -708,13 +755,17 @@
         </br>
         <span>Light 0</span>
         <table>
-            <tr>loc</tr>
+            <tr>
+                <td>location</td>
+            </tr>
             <tr>
                 <td>X: <input style="max-width: 70%; vertical-align: middle;" id="0_llocX" type="range" autocomplete="off" value="0." max="20." min="-20." oninput="update_light_location(0)"></td>
                 <td>Y: <input style="max-width: 70%; vertical-align: middle;" id="0_llocY" type="range" autocomplete="off" value="5." max="20." min="-20." oninput="update_light_location(0)"></td>
                 <td>Z: <input style="max-width: 70%; vertical-align: middle;" id="0_llocZ" type="range" autocomplete="off" value="-10." max="0." min="-75." oninput="update_light_location(0)"></td>
             </tr>
-            <tr>color</tr>
+            <tr>
+                <td>color</td>
+            </tr>
             <tr>
                 <td>R: <input style="max-width: 70%; vertical-align: middle;" id="0_lR" type="range" autocomplete="off" value="10." max="10." min="0." oninput="update_light_color(0)"></td>
                 <td>G: <input style="max-width: 70%; vertical-align: middle;" id="0_lG" type="range" autocomplete="off" value="10." max="10." min="0." oninput="update_light_color(0)"></td>
@@ -723,13 +774,15 @@
         </table>
         <span>Light 1</span>
         <table>
-            <span>loc</span>
+            <tr><td>location</td></tr>
             <tr>
                 <td>X: <input style="max-width: 70%; vertical-align: middle;" id="1_llocX" type="range" autocomplete="off" value="0." max="20." min="-20." oninput="update_light_location(1)"></td>
                 <td>Y: <input style="max-width: 70%; vertical-align: middle;" id="1_llocY" type="range" autocomplete="off" value="5." max="20." min="-20." oninput="update_light_location(1)"></td>
                 <td>Z: <input style="max-width: 70%; vertical-align: middle;" id="1_llocZ" type="range" autocomplete="off" value="-10." max="0." min="-75." oninput="update_light_location(1)"></td>
             </tr>
-            <span>color</span>
+            <tr>
+                <td>color</td>
+            </tr>
             <tr>
                 <td>R: <input style="max-width: 70%; vertical-align: middle;" id="1_lR" type="range" autocomplete="off" value="10." max="10." min="0." oninput="update_light_color(1)"></td>
                 <td>G: <input style="max-width: 70%; vertical-align: middle;" id="1_lG" type="range" autocomplete="off" value="10." max="10." min="0." oninput="update_light_color(1)"></td>
@@ -740,7 +793,12 @@
         </br>
         </br>
 
-        <span>Object</span>
+        <span>Object</span>  
+        <select id="value_select" oninput="update_focus(this.value)" autocomplete="off">
+            <option value="0">Object 1</option>
+            <option value="1">Object 2</option>
+            <option value="2">Object 3</option>
+        </select>
         <table>
             <tr>
             <th></th>
@@ -750,25 +808,25 @@
             </tr>
             <tr>
                 <td>Trans.</td>
-                <td><input id="0_transX" type="range" autocomplete="off" value="0." max="50." min="-50." oninput="update_trans(0)"></td>
-                <td><input id="0_transY" type="range" autocomplete="off" value="0." max="50." min="-50." oninput="update_trans(0)"></td>
-                <td><input id="0_transZ" type="range" autocomplete="off" value="-15." max="0." min="-120." oninput="update_trans(0)"></td>
+                <td><input id="transX" type="range" autocomplete="off" value="0." max="50." min="-50." oninput="update_trans(obj_focus)"></td>
+                <td><input id="transY" type="range" autocomplete="off" value="0." max="50." min="-50." oninput="update_trans(obj_focus)"></td>
+                <td><input id="transZ" type="range" autocomplete="off" value="-15." max="0." min="-120." oninput="update_trans(obj_focus)"></td>
             </tr>
             <tr>
                 <td>Rotate</td>
-                <td><input id="0_rotateX" type="range" autocomplete="off" value="0." max="180." min="-180." oninput="update_rotate(0)"></td>
-                <td><input id="0_rotateY" type="range" autocomplete="off" value="0." max="180." min="-180." oninput="update_rotate(0)"></td>
-                <td><input id="0_rotateZ" type="range" autocomplete="off" value="0." max="180." min="-180." oninput="update_rotate(0)"></td>
+                <td><input id="rotateX" type="range" autocomplete="off" value="0." max="180." min="-180." oninput="update_rotate(obj_focus)"></td>
+                <td><input id="rotateY" type="range" autocomplete="off" value="0." max="180." min="-180." oninput="update_rotate(obj_focus)"></td>
+                <td><input id="rotateZ" type="range" autocomplete="off" value="0." max="180." min="-180." oninput="update_rotate(obj_focus)"></td>
             </tr>
             <tr>
                 <td>Shear</td>
-                <td><input id="0_shearX" type="range" autocomplete="off" value="90." max="130." min="50." oninput="update_shear(0)"></td>
-                <td><input id="0_shearY" type="range" autocomplete="off" value="90." max="130." min="50." oninput="update_shear(0)"></td>
-                <td><input id="0_shearZ" type="range" autocomplete="off" value="90." max="130." min="50." oninput="update_shear(0)"></td>
+                <td><input id="shearX" type="range" autocomplete="off" value="90." max="130." min="50." oninput="update_shear(obj_focus)"></td>
+                <td><input id="shearY" type="range" autocomplete="off" value="90." max="130." min="50." oninput="update_shear(obj_focus)"></td>
+                <td><input id="shearZ" type="range" autocomplete="off" value="90." max="130." min="50." oninput="update_shear(obj_focus)"></td>
             </tr>
             <tr>
                 <td>Scale</td>
-                <td><input id="0_scale" type="range" autocomplete="off" value="0." max="100." min="-100." oninput="update_scale(0)"></td>
+                <td><input id="scale" type="range" autocomplete="off" value="0." max="100." min="-100." oninput="update_scale(obj_focus)"></td>
             </tr>
         </table>
         <table>
@@ -776,10 +834,10 @@
                 <td>Clipping?</td>
                 <td><input id="clip_flag" type="checkbox" autocomplete="off" oninput="update_clip_flag(this.checked)"></td>
                 <td>Y plane</td>
-                <td><input id="0_clip" type="range" autocomplete="off" value="-10." max="10." min="-10." oninput="update_clip(0)"></td>
+                <td><input id="clip" type="range" autocomplete="off" value="-10." max="10." min="-10." step="0.1" oninput="update_clip(obj_focus)"></td>
             </tr>
         </table>
-        <span>Auto Rotate</span><input id="auto_rotate" type="checkbox" autocomplete="off" oninput="rotate_flag=this.checked;">
+        <span>Auto Rotate</span><input id="auto_rotate" type="checkbox" autocomplete="off" oninput="rotate_flag=this.checked;update_auto_rotate(this.checked)">
         <span>Auto Light</span><input id="auto_light" type="checkbox" autocomplete="off" oninput="random_light_flag=this.checked;">
 
 
